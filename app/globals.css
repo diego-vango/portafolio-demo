@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-midnight: #0F0F0F;
+  --color-brand-lilac: #DCB8FE;
+  --color-brand-lime: #C2FF01;
+  --color-brand-blue: #0044FD;
+  --color-brand-orange: #FE4502;
+  --color-brand-cyan: #00BBFC;
+  --color-trino-orange: #FF4D00;
+
+  --font-sans: var(--font-dm-sans), sans-serif;
+  --font-display: var(--font-syne), sans-serif;
+}
+
+/* Bold Typography Custom Utilities */
+.text-massive {
+  font-size: clamp(3rem, 10vw, 8rem);
+  line-height: 0.85;
+  letter-spacing: -0.04em;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(10px);
+}
+
+.border-trino {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #0F0F0F;
+}
+::-webkit-scrollbar-thumb {
+  background: #222;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #FE4502;
+}
+
+/* Custom Selection */
+::selection {
+  background-color: #C2FF01;
+  color: #1B1D21;
+}
+
+/* Focus styles */
+*:focus-visible {
+  outline: 2px solid #C2FF01;
+  outline-offset: 2px;
+}

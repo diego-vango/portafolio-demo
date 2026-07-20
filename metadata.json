@@ -1,0 +1,6 @@
+{
+  "name": "Trino",
+  "description": "Agencia de proyectos culturales que impulsa proyectos artísticos con gestión integral y humana.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
