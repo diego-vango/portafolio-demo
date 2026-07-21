@@ -81,16 +81,30 @@ function parseCSV(csvText: string) {
     const date = row['date'] || row['fecha'] || '';
     const location = row['location'] || row['ubicación'] || row['ubicacion'] || '';
 
+    // Advanced Gallery parse
+    const rawGallery = row['gallery'] || row['galería'] || row['galeria'] || row['imagenes'] || row['images'] || '';
+    const gallery = rawGallery
+      ? rawGallery.split(/[;,]/).map(url => url.trim()).filter(Boolean)
+      : [];
+
+    // Advanced Highlights parse
+    const rawHighlights = row['highlights'] || row['destacados'] || row['tags'] || '';
+    const highlights = rawHighlights
+      ? rawHighlights.split(';').map(h => h.trim()).filter(Boolean)
+      : [];
+
     if (title) {
       items.push({
         id: `sheet-${i}`,
         title,
         category,
         description,
-        image: image && image.startsWith('http') ? image : `https://picsum.photos/seed/sheet-${i}/800/600`,
+        image: image && image.startsWith('http') ? image : `https://images.unsplash.com/photo-1460881680858-30d872d5b530?q=80&w=1200&auto=format&fit=crop`,
+        gallery: gallery.length > 0 ? gallery : (image && image.startsWith('http') ? [image] : []),
         videoUrl,
         date,
-        location
+        location,
+        highlights
       });
     }
   }
@@ -113,7 +127,6 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      source: 'Google Sheets Live Database (Edge Runtime)',
       items: items
     });
   } catch (error: any) {
