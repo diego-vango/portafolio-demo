@@ -1,4 +1,4 @@
-import type {Metadata} from 'next';
+import type { Metadata } from 'next';
 import { DM_Sans, Syne } from 'next/font/google';
 import './globals.css'; // Global styles
 
@@ -17,6 +17,13 @@ const syne = Syne({
 export const metadata: Metadata = {
   title: 'Trino | Agencia de Proyectos Culturales',
   description: 'Somos una agencia de proyectos culturales que impulsa proyectos artísticos y culturales con gestión integral y humana.',
+  icons: {
+    icon: [
+      { url: '/icon.png', type: 'image/png' },
+      { url: '/favicon.ico' },
+    ],
+    apple: '/apple-touch-icon.png',
+  },
 };
 
 export default function RootLayout({children}: {children: React.ReactNode}) {
