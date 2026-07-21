@@ -1,5 +1,5 @@
 import React from 'react'
-import { Camera, Film, Layers } from 'lucide-react'
+import { Camera, Film, Layers, Sparkles } from 'lucide-react'
 import PortfolioGrid, { PortfolioItem } from '../components/PortfolioGrid'
 
 export const runtime = 'edge';
@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 const DEFAULT_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQc8AQvB-p3o5582lkJ8VyWAFhkyWYkfzOX5cFie39AQvARJz3eWrbadaon1wSdeT8MBU0QFERBhrhm/pub?output=csv";
 
-// Sanitizador universal de URLs (remueve corchetes, comillas y formatos Markdown)
+// Sanitizador de URLs
 const cleanUrl = (url: string): string => {
   if (!url) return '';
   let cleaned = url.replace(/^[\[\(\s"']+|[\]\)\s"']+$/g, '').trim();
@@ -18,7 +18,7 @@ const cleanUrl = (url: string): string => {
   return cleaned;
 };
 
-// Sanitizador de cadenas de texto
+// Sanitizador de texto
 const cleanStringValue = (val: string): string => {
   if (!val) return '';
   let s = val.trim();
@@ -43,7 +43,7 @@ function parseCSV(csvText: string): PortfolioItem[] {
       lines.push(currentLine);
       currentLine = '';
     } else if (char === '\r' && !inQuotes) {
-      // Ignorar
+      // Ignorar \r
     } else {
       currentLine += char;
     }
@@ -91,10 +91,11 @@ function parseCSV(csvText: string): PortfolioItem[] {
     const row: Record<string, string> = {};
 
     headers.forEach((header, idx) => {
-      row[header] = cleanStringValue(values[idx] || '');
+      if (header) {
+        row[header] = cleanStringValue(values[idx] || '');
+      }
     });
 
-    // Capturamos cualquier valor sobrante por columnas sin nombre (Unnamed)
     const extraValues = values.slice(headers.length).map(v => cleanStringValue(v)).filter(Boolean);
 
     const title = row['title'] || row['título'] || row['titulo'] || row['nombre'] || '';
@@ -111,7 +112,7 @@ function parseCSV(csvText: string): PortfolioItem[] {
     let rawGallery = row['gallery'] || row['galería'] || row['galeria'] || row['fotos'] || '';
     let rawHighlights = row['highlights'] || row['destacados'] || row['tags'] || '';
 
-    // INTELECTA DE AUTOCORRECCIÓN: Si videoUrl no vino en su columna, búscalo en date/location/highlights
+    // Autocorrección de campos desplazados
     const allFields = [date, location, rawHighlights, rawGallery, ...extraValues];
     for (const field of allFields) {
       if (field && (field.includes('youtube.com') || field.includes('vimeo.com') || field.includes('youtu.be'))) {
@@ -125,28 +126,20 @@ function parseCSV(csvText: string): PortfolioItem[] {
       }
     }
 
-    // INTELECTA DE AUTOCORRECCIÓN: Si la galeria vino descalzada en date/location
     for (const field of [date, location]) {
-      if (field && (field.includes('unsplash.com') || field.includes('.jpg') || field.includes('.png') || field.includes(','))) {
+      if (field && (field.includes('unsplash.com') || field.includes('ibb.co') || field.includes('.jpg') || field.includes('.png') || field.includes(','))) {
         if (!rawGallery) rawGallery = field;
         if (field === date) date = '';
         if (field === location) location = '';
       }
     }
 
-    // Reubicar date / location si se desplazaron a extraValues
-    if (!date && location && !location.startsWith('http')) {
-      // date está bien en location
-    } else if (!date && extraValues.length > 0) {
+    if (!date && extraValues.length > 0) {
       date = extraValues.find(v => !v.startsWith('http')) || date;
     }
 
     if (!location && extraValues.length > 0) {
       location = extraValues.find(v => !v.startsWith('http') && v !== date) || location;
-    }
-
-    if (!rawHighlights && extraValues.length > 0) {
-      rawHighlights = extraValues.filter(v => !v.startsWith('http') && v !== date && v !== location).join('; ');
     }
 
     const gallery = rawGallery
@@ -198,7 +191,7 @@ async function getPortfolioData(): Promise<PortfolioItem[]> {
 
     return parsed.length > 0 ? parsed : [];
   } catch (error) {
-    console.error('Error fetching/parsing CSV:', error);
+    console.error('Error fetching CSV:', error);
     try {
       const fallbackRes = await fetch(DEFAULT_SHEET_URL, { cache: 'no-store' });
       if (fallbackRes.ok) {
@@ -216,77 +209,86 @@ export default async function HomePage() {
   const items = await getPortfolioData();
 
   return (
-    <div className="min-h-screen bg-black text-white selection:bg-white selection:text-black font-sans">
+    <div className="w-full min-h-screen bg-black text-white selection:bg-[#C2FF01] selection:text-black font-sans overflow-x-hidden">
       
-      {/* HEADER MINIMALISTA */}
-      <header className="sticky top-0 z-40 bg-black/80 backdrop-blur-md border-b border-zinc-900/60">
-        <div className="max-w-7xl mx-auto px-6 h-24 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <span className="font-sans font-black text-xl uppercase tracking-[0.25em]">
-              TRINO <span className="text-zinc-600 font-serif italic text-sm tracking-normal ml-1">Estudio</span>
+      {/* HEADER ADAPTABLE CON ACCENT VERDE */}
+      <header className="sticky top-0 z-40 bg-black/90 backdrop-blur-md border-b border-zinc-900 px-4 sm:px-8">
+        <div className="max-w-7xl mx-auto h-20 sm:h-24 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="font-sans font-black text-xl sm:text-2xl uppercase tracking-[0.2em] text-[#C2FF01]">
+              TRINO
+            </span>
+            <span className="text-zinc-500 font-serif italic text-xs sm:text-sm tracking-normal">
+              Estudio
             </span>
           </div>
-          <div className="flex items-center gap-6 text-[10px] font-mono tracking-widest text-zinc-500 uppercase">
+          
+          <div className="flex items-center gap-3 sm:gap-6 text-[10px] sm:text-xs font-mono tracking-widest text-zinc-400 uppercase">
             <span>Santiago, CL</span>
-            <span className="hidden sm:inline-block text-zinc-700">•</span>
-            <span className="hidden sm:inline-block">Est. 2026</span>
+            <span className="text-[#C2FF01]">•</span>
+            <span>Est. 2026</span>
           </div>
         </div>
       </header>
 
-      {/* HERO CON VIDEO CINEMATOGRÁFICO DE FONDO GARANTIZADO */}
-      <section className="relative overflow-hidden border-b border-zinc-900/60 min-h-[65vh] flex flex-col justify-center py-24 md:py-32">
-        <div className="absolute inset-0 z-0 pointer-events-none">
-          <video 
-            autoPlay 
-            muted 
-            loop 
-            playsInline 
-            className="w-full h-full object-cover opacity-40 scale-105 transform"
-          >
-            <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4" type="video/mp4" />
-          </video>
-        </div>
-        
-        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black z-10 pointer-events-none" />
-        
-        <div className="max-w-5xl mx-auto px-6 text-center space-y-8 relative z-20">
-          <h1 className="font-sans font-black text-5xl md:text-8xl uppercase tracking-tighter leading-[0.85] text-white">
-            TRINO<br />
-            <span className="text-zinc-300 font-serif italic text-4xl md:text-6xl tracking-tight block mt-4 lowercase font-medium">Música, Teatro & Cultura</span>
+      {/* HERO SECTION CON LOGO OFICIAL & ESTÉTICA VERDE ÁCIDO */}
+      <section className="relative overflow-hidden border-b border-zinc-900 py-16 sm:py-24 px-4">
+        {/* Glow de fondo verdoso sin opacar */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 sm:w-96 h-72 sm:h-96 bg-[#C2FF01]/10 rounded-full blur-[100px] pointer-events-none -z-10" />
+
+        <div className="max-w-4xl mx-auto text-center space-y-6 sm:space-y-8 relative z-10">
+          
+          {/* ISOLOGO OFICIAL TRINO CON FALLBACK ROBUSTO */}
+          <div className="relative inline-block mx-auto max-w-[240px] sm:max-w-[340px] md:max-w-[400px] px-2">
+            <img 
+              src="/logo.png" 
+              alt="TRINO" 
+              className="w-full h-auto object-contain mx-auto filter drop-shadow-[0_0_20px_rgba(194,255,1,0.25)]"
+            />
+          </div>
+
+          {/* SUBTÍTULO CULTURAL */}
+          <h1 className="font-serif italic text-2xl sm:text-4xl md:text-5xl text-zinc-200 font-normal tracking-tight">
+            música, teatro & cultura
           </h1>
 
-          <p className="text-zinc-200 text-sm md:text-base max-w-xl mx-auto leading-relaxed font-sans font-light">
+          {/* DESCRIPCIÓN 100% RESPONSIVE EN MÓVILES */}
+          <p className="text-xs sm:text-base text-zinc-400 max-w-xl mx-auto leading-relaxed font-sans font-light px-2">
             Dirección artística, curatoría de contenidos y producción ejecutiva. Creamos y promovemos experiencias culturales de primer nivel con un enfoque estético impecable.
           </p>
 
-          <div className="flex items-center justify-center gap-6 pt-6 text-[10px] font-mono text-zinc-300 uppercase tracking-widest">
-            <span className="flex items-center gap-2">
-              <Camera className="w-4.5 h-4.5 stroke-[1.2]" />
+          {/* BADGES RESPONSIVAS (SE ADAPTAN EN LÍNEAS INDEPENDIENTES EN CELULARES) */}
+          <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-4 pt-4 text-[10px] sm:text-xs font-mono uppercase tracking-wider">
+            <span className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-950 border border-zinc-800 text-zinc-300">
+              <Camera className="w-3.5 h-3.5 text-[#C2FF01]" />
               Dirección de Arte
             </span>
-            <span className="text-zinc-600">|</span>
-            <span className="flex items-center gap-2">
-              <Film className="w-4.5 h-4.5 stroke-[1.2]" />
+            <span className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-950 border border-zinc-800 text-zinc-300">
+              <Film className="w-3.5 h-3.5 text-[#C2FF01]" />
               Producción de Escena
             </span>
-            <span className="text-zinc-600">|</span>
-            <span className="flex items-center gap-2">
-              <Layers className="w-4.5 h-4.5 stroke-[1.2]" />
+            <span className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-950 border border-zinc-800 text-zinc-300">
+              <Layers className="w-3.5 h-3.5 text-[#C2FF01]" />
               Curatoría Cultural
             </span>
           </div>
+
         </div>
       </section>
 
       {/* PORTFOLIO GRID */}
-      <main className="max-w-7xl mx-auto px-6 py-24 relative z-20 bg-black">
-        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-4 mb-16 pb-6 border-b border-zinc-900/60">
+      <main className="max-w-7xl mx-auto px-4 sm:px-8 py-16 sm:py-24 bg-black">
+        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-3 mb-12 pb-6 border-b border-zinc-900">
           <div>
-            <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Colección Seleccionada</span>
-            <h2 className="font-serif italic text-3xl text-white mt-2 font-normal">Obras & Producciones</h2>
+            <span className="text-[10px] font-mono text-[#C2FF01] uppercase tracking-widest flex items-center gap-1.5">
+              <Sparkles className="w-3 h-3" />
+              Colección Seleccionada
+            </span>
+            <h2 className="font-serif italic text-2xl sm:text-4xl text-white mt-1 font-normal">
+              Obras & Producciones
+            </h2>
           </div>
-          <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
+          <div className="self-start sm:self-auto px-3 py-1 rounded-full bg-[#C2FF01]/10 border border-[#C2FF01]/30 text-[#C2FF01] text-[10px] font-mono tracking-widest uppercase">
             {items.length} {items.length === 1 ? 'PROYECTO' : 'PROYECTOS'}
           </div>
         </div>
@@ -294,17 +296,24 @@ export default async function HomePage() {
         {items.length > 0 ? (
           <PortfolioGrid items={items} />
         ) : (
-          <div className="text-center py-20 text-zinc-500 font-mono text-sm uppercase">Cargando proyectos en cartelera...</div>
+          <div className="text-center py-20 text-zinc-500 font-mono text-sm uppercase">
+            Cargando proyectos en cartelera...
+          </div>
         )}
       </main>
 
       {/* FOOTER */}
-      <footer className="py-24 text-center border-t border-zinc-900/60 bg-black relative z-20">
-        <div className="max-w-7xl mx-auto px-6 space-y-4">
-          <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">© 2026 TRINO. TODOS LOS DERECHOS RESERVADOS.</p>
-          <p className="text-[9px] font-sans text-zinc-700 uppercase tracking-widest font-light">SANTIAGO • VALPARAÍSO • DIRECCIÓN ARTÍSTICA</p>
+      <footer className="py-16 text-center border-t border-zinc-900 bg-black px-4">
+        <div className="max-w-7xl mx-auto space-y-3">
+          <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">
+            © 2026 <span className="text-[#C2FF01]">TRINO</span>. TODOS LOS DERECHOS RESERVADOS.
+          </p>
+          <p className="text-[9px] font-sans text-zinc-600 uppercase tracking-widest font-light">
+            SANTIAGO • VALPARAÍSO • DIRECCIÓN ARTÍSTICA
+          </p>
         </div>
       </footer>
+
     </div>
   )
 }
