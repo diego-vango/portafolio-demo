@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import Image from 'next/image'
 import { motion, AnimatePresence } from 'motion/react'
 import { Play, X, MapPin, Calendar, ArrowLeft, ArrowRight, Video, ImageIcon, Sparkles, Camera } from 'lucide-react'
 
@@ -49,7 +48,6 @@ const getEmbedUrl = (url: string) => {
 
 const getFallbackImage = (category?: string, id?: string) => {
   const cat = category?.toLowerCase() || '';
-  const seed = id ? encodeURIComponent(id) : 'trino';
   if (cat.includes('teatro')) {
     return `https://images.unsplash.com/photo-1507679799987-c73779587ccf?q=80&w=1200&auto=format&fit=crop`;
   }
@@ -177,13 +175,11 @@ export default function PortfolioGrid({ items }: PortfolioGridProps) {
                 {/* Media Aspect Container */}
                 <div className="relative aspect-[16/10] w-full overflow-hidden bg-black" id={`media-container-${item.id}`}>
                   {imageUrl ? (
-                    <Image
+                    <img
                       id={`media-img-${item.id}`}
                       src={imageUrl}
                       alt={item.title}
-                      fill
-                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                      className="object-cover transition-transform duration-1000 ease-out group-hover:scale-105 filter grayscale group-hover:grayscale-0"
+                      className="w-full h-full object-cover transition-transform duration-1000 ease-out group-hover:scale-105 filter grayscale group-hover:grayscale-0"
                       referrerPolicy="no-referrer"
                       onError={() => {
                         setBrokenImages(prev => ({ ...prev, [item.id]: true }))
@@ -397,12 +393,10 @@ export default function PortfolioGrid({ items }: PortfolioGridProps) {
                             transition={{ duration: 0.3 }}
                             className="relative w-full h-full"
                           >
-                            <Image
+                            <img
                               src={cleanGallery[currentImageIndex] || getFallbackImage(selectedItem.category, selectedItem.id)}
                               alt={`${selectedItem.title} gallery ${currentImageIndex}`}
-                              fill
-                              sizes="(max-width: 1024px) 100vw, 60vw"
-                              className="object-contain p-2"
+                              className="w-full h-full object-contain p-2"
                               referrerPolicy="no-referrer"
                             />
                           </motion.div>
@@ -447,12 +441,10 @@ export default function PortfolioGrid({ items }: PortfolioGridProps) {
                             currentImageIndex === i ? 'border-white opacity-100 scale-105' : 'border-zinc-900 opacity-40 hover:opacity-80'
                           }`}
                         >
-                          <Image
+                          <img
                             src={img || getFallbackImage(selectedItem.category, selectedItem.id)}
                             alt={`thumb ${i}`}
-                            fill
-                            sizes="100px"
-                            className="object-cover"
+                            className="w-full h-full object-cover"
                             referrerPolicy="no-referrer"
                           />
                         </button>

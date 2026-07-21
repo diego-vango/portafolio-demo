@@ -5,7 +5,13 @@ import PortfolioGrid, { PortfolioItem } from '../components/PortfolioGrid'
 export const runtime = 'edge';
 export const revalidate = 60; // Cache refresh every 60s
 
-const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQc8AQvB-p3o5582lkJ8VyWAFhkyWYkfzOX5cFie39AQvARJz3eWrbadaon1wSdeT8MBU0QFERBhrhm/pub?output=csv";
+const DEFAULT_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQc8AQvB-p3o5582lkJ8VyWAFhkyWYkfzOX5cFie39AQvARJz3eWrbadaon1wSdeT8MBU0QFERBhrhm/pub?output=csv";
+
+// Helper function to clean quotes and whitespace from parsed strings
+const cleanStringValue = (val: string): string => {
+  if (!val) return '';
+  return val.replace(/^"|"$/g, '').replace(/[\r\n]+/g, ' ').trim();
+};
 
 // Premium Fallback data showcasing rich gallery images and highlights
 const FALLBACK_ITEMS: PortfolioItem[] = [
@@ -98,18 +104,18 @@ function parseCSV(csvText: string): PortfolioItem[] {
           inQuotes = !inQuotes;
         }
       } else if (char === ',' && !inQuotes) {
-        result.push(current.trim());
+        result.push(current);
         current = '';
       } else {
         current += char;
       }
     }
-    result.push(current.trim());
+    result.push(current);
     return result;
   };
 
   const rawHeaders = parseLine(lines[0]);
-  const headers = rawHeaders.map(h => h.toLowerCase().trim());
+  const headers = rawHeaders.map(h => cleanStringValue(h).toLowerCase());
 
   const items: PortfolioItem[] = [];
 
@@ -126,22 +132,38 @@ function parseCSV(csvText: string): PortfolioItem[] {
       }
     });
 
-    const title = row['title'] || row['título'] || row['titulo'] || '';
-    const category = row['category'] || row['categoría'] || row['categoria'] || '';
-    const description = row['description'] || row['descripción'] || row['descripcion'] || '';
-    const image = row['image'] || row['imagen'] || row['imageurl'] || row['image url'] || '';
-    const videoUrl = row['videourl'] || row['video url'] || row['video'] || '';
-    const date = row['date'] || row['fecha'] || '';
-    const location = row['location'] || row['ubicación'] || row['ubicacion'] || '';
+    const title = cleanStringValue(row['title'] || row['título'] || row['titulo'] || '');
+    const category = cleanStringValue(row['category'] || row['categoría'] || row['categoria'] || '');
+    const description = cleanStringValue(row['description'] || row['descripción'] || row['descripcion'] || '');
+    
+    // Extractor of cleaned image URL
+    let image = cleanStringValue(row['image'] || row['imagen'] || row['imageurl'] || row['image url'] || '');
+    if (image && image.startsWith('"') && image.endsWith('"')) {
+      image = image.slice(1, -1).trim();
+    }
 
-    // Advanced Gallery parse
-    const rawGallery = row['gallery'] || row['galería'] || row['galeria'] || row['imagenes'] || row['images'] || '';
+    let videoUrl = cleanStringValue(row['videourl'] || row['video url'] || row['video'] || '');
+    if (videoUrl && videoUrl.startsWith('"') && videoUrl.endsWith('"')) {
+      videoUrl = videoUrl.slice(1, -1).trim();
+    }
+
+    const date = cleanStringValue(row['date'] || row['fecha'] || '');
+    const location = cleanStringValue(row['location'] || row['ubicación'] || row['ubicacion'] || '');
+
+    // Advanced Gallery parse with thorough cleaning
+    const rawGallery = cleanStringValue(row['gallery'] || row['galería'] || row['galeria'] || row['imagenes'] || row['images'] || '');
     const gallery = rawGallery
-      ? rawGallery.split(/[;,]/).map(url => url.trim()).filter(Boolean)
+      ? rawGallery.split(/[;,]/)
+          .map(url => {
+            let u = url.trim();
+            if (u.startsWith('"') && u.endsWith('"')) u = u.slice(1, -1).trim();
+            return u;
+          })
+          .filter(url => url.startsWith('http'))
       : [];
 
     // Advanced Highlights parse
-    const rawHighlights = row['highlights'] || row['destacados'] || row['tags'] || '';
+    const rawHighlights = cleanStringValue(row['highlights'] || row['destacados'] || row['tags'] || '');
     const highlights = rawHighlights
       ? rawHighlights.split(';').map(h => h.trim()).filter(Boolean)
       : [];
@@ -167,7 +189,8 @@ function parseCSV(csvText: string): PortfolioItem[] {
 
 async function getPortfolioData(): Promise<PortfolioItem[]> {
   try {
-    const response = await fetch(SHEET_CSV_URL, {
+    const sheetUrl = process.env.NEXT_PUBLIC_SHEET_URL || DEFAULT_SHEET_URL;
+    const response = await fetch(sheetUrl, {
       next: { revalidate: 60 },
       headers: {
         'Accept': 'text/csv',
@@ -219,18 +242,29 @@ export default async function HomePage() {
         </div>
       </header>
 
-      {/* CINEMATIC HERO SECTION */}
-      <section className="relative overflow-hidden border-b border-zinc-900/60 py-28 md:py-36 flex flex-col justify-center" id="hero-section">
-        {/* Cinematic ambient background */}
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-zinc-900/40 via-black to-black -z-10" />
+      {/* CINEMATIC HERO SECTION WITH BACKGROUND VIDEO */}
+      <section className="relative overflow-hidden border-b border-zinc-900/60 min-h-[65vh] flex flex-col justify-center py-24 md:py-32" id="hero-section">
+        {/* Background loop video */}
+        <div className="absolute inset-0 w-full h-full overflow-hidden -z-10">
+          <video
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="w-full h-full object-cover opacity-50"
+            src="https://assets.mixkit.co/videos/preview/mixkit-set-of-plateaus-seen-from-the-sky-in-a-4k-12240-large.mp4"
+          />
+          {/* High contrast ambient overlay */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/60 to-black" />
+        </div>
         
-        <div className="max-w-5xl mx-auto px-6 text-center space-y-8">
+        <div className="max-w-5xl mx-auto px-6 text-center space-y-8 relative z-10">
           <h1 className="font-sans font-black text-5xl md:text-8xl uppercase tracking-tighter leading-[0.85] text-white" id="hero-title">
             TRINO<br />
-            <span className="text-zinc-500 font-serif italic text-4xl md:text-6xl tracking-tight block mt-4 lowercase font-medium">Música, Teatro & Cultura</span>
+            <span className="text-zinc-400 font-serif italic text-4xl md:text-6xl tracking-tight block mt-4 lowercase font-medium">Música, Teatro & Cultura</span>
           </h1>
 
-          <p className="text-zinc-400 text-sm md:text-base max-w-xl mx-auto leading-relaxed font-sans font-light" id="hero-desc">
+          <p className="text-zinc-300 text-sm md:text-base max-w-xl mx-auto leading-relaxed font-sans font-light" id="hero-desc">
             Dirección artística, curatoría de contenidos y producción ejecutiva. Creamos y promovemos experiencias culturales de primer nivel con un enfoque estético impecable.
           </p>
 
@@ -266,7 +300,7 @@ export default async function HomePage() {
             </h2>
           </div>
           <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider" id="items-counter">
-            {items.length} {items.length === 1 ? 'PROYECTO EXPENDIDO' : 'PROYECTOS EXPENDIDOS'}
+            {items.length} {items.length === 1 ? 'PROYECTO' : 'PROYECTOS'}
           </div>
         </div>
 
