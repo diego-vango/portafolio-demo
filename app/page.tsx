@@ -3,7 +3,7 @@ import { Camera, Film, Layers } from 'lucide-react'
 import PortfolioGrid, { PortfolioItem } from '../components/PortfolioGrid'
 
 export const runtime = 'edge';
-export const revalidate = 60; // Cache refresh every 60s
+export const dynamic = 'force-dynamic';
 
 const DEFAULT_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQc8AQvB-p3o5582lkJ8VyWAFhkyWYkfzOX5cFie39AQvARJz3eWrbadaon1wSdeT8MBU0QFERBhrhm/pub?output=csv";
 
@@ -11,6 +11,14 @@ const DEFAULT_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQc8A
 const cleanStringValue = (val: string): string => {
   if (!val) return '';
   return val.replace(/^"|"$/g, '').replace(/[\r\n]+/g, ' ').trim();
+};
+
+// Helper to sanitize URL strings, removing quotes, Excel formula artifacts, parentheses, and brackets
+const cleanUrl = (url: string): string => {
+  if (!url) return '';
+  let cleaned = url.trim();
+  cleaned = cleaned.replace(/^[\s"'=\[{\(]+|[\s"'\]}\)]+$/g, '').trim();
+  return cleaned;
 };
 
 // Premium Fallback data showcasing rich gallery images and highlights
@@ -132,40 +140,31 @@ function parseCSV(csvText: string): PortfolioItem[] {
       }
     });
 
-    const title = cleanStringValue(row['title'] || row['título'] || row['titulo'] || '');
-    const category = cleanStringValue(row['category'] || row['categoría'] || row['categoria'] || '');
-    const description = cleanStringValue(row['description'] || row['descripción'] || row['descripcion'] || '');
+    const title = cleanStringValue(row['title'] || row['título'] || row['titulo'] || row['nombre'] || '');
+    const category = cleanStringValue(row['category'] || row['categoría'] || row['categoria'] || row['rubro'] || row['tipo'] || '');
+    const description = cleanStringValue(row['description'] || row['descripción'] || row['descripcion'] || row['resumen'] || row['detalle'] || '');
     
-    // Extractor of cleaned image URL
-    let image = cleanStringValue(row['image'] || row['imagen'] || row['imageurl'] || row['image url'] || '');
-    if (image && image.startsWith('"') && image.endsWith('"')) {
-      image = image.slice(1, -1).trim();
-    }
+    let image = cleanStringValue(row['image'] || row['imagen'] || row['imageurl'] || row['image url'] || row['foto'] || row['portada'] || '');
+    image = cleanUrl(image);
 
-    let videoUrl = cleanStringValue(row['videourl'] || row['video url'] || row['video'] || '');
-    if (videoUrl && videoUrl.startsWith('"') && videoUrl.endsWith('"')) {
-      videoUrl = videoUrl.slice(1, -1).trim();
-    }
+    let videoUrl = cleanStringValue(row['videourl'] || row['video url'] || row['video'] || row['link'] || '');
+    videoUrl = cleanUrl(videoUrl);
 
-    const date = cleanStringValue(row['date'] || row['fecha'] || '');
-    const location = cleanStringValue(row['location'] || row['ubicación'] || row['ubicacion'] || '');
+    const date = cleanStringValue(row['date'] || row['fecha'] || row['año'] || row['anio'] || '');
+    const location = cleanStringValue(row['location'] || row['ubicación'] || row['ubicacion'] || row['ciudad'] || row['lugar'] || '');
 
     // Advanced Gallery parse with thorough cleaning
-    const rawGallery = cleanStringValue(row['gallery'] || row['galería'] || row['galeria'] || row['imagenes'] || row['images'] || '');
+    const rawGallery = cleanStringValue(row['gallery'] || row['galería'] || row['galeria'] || row['imagenes'] || row['images'] || row['fotos'] || '');
     const gallery = rawGallery
       ? rawGallery.split(/[;,]/)
-          .map(url => {
-            let u = url.trim();
-            if (u.startsWith('"') && u.endsWith('"')) u = u.slice(1, -1).trim();
-            return u;
-          })
+          .map(url => cleanUrl(url))
           .filter(url => url.startsWith('http'))
       : [];
 
     // Advanced Highlights parse
-    const rawHighlights = cleanStringValue(row['highlights'] || row['destacados'] || row['tags'] || '');
+    const rawHighlights = cleanStringValue(row['highlights'] || row['destacados'] || row['tags'] || row['etiquetas'] || row['hitos'] || '');
     const highlights = rawHighlights
-      ? rawHighlights.split(';').map(h => h.trim()).filter(Boolean)
+      ? rawHighlights.split(';').map(h => cleanStringValue(h)).filter(Boolean)
       : [];
 
     if (title) {
@@ -191,7 +190,8 @@ async function getPortfolioData(): Promise<PortfolioItem[]> {
   try {
     const sheetUrl = process.env.NEXT_PUBLIC_SHEET_URL || DEFAULT_SHEET_URL;
     const response = await fetch(sheetUrl, {
-      next: { revalidate: 60 },
+      cache: 'no-store',
+      next: { revalidate: 0 },
       headers: {
         'Accept': 'text/csv',
       }
@@ -244,22 +244,15 @@ export default async function HomePage() {
 
       {/* CINEMATIC HERO SECTION WITH BACKGROUND VIDEO */}
       <section className="relative overflow-hidden border-b border-zinc-900/60 min-h-[65vh] flex flex-col justify-center py-24 md:py-32" id="hero-section">
-        {/* Background loop video */}
-        <div className="absolute inset-0 w-full h-full overflow-hidden -z-10">
-          <video
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="w-full h-full object-cover opacity-50"
-            src="https://assets.mixkit.co/videos/preview/mixkit-set-of-plateaus-seen-from-the-sky-in-a-4k-12240-large.mp4"
-          />
-          {/* High contrast ambient overlay */}
-          <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/60 to-black" />
-        </div>
+        {/* Background loop video with exactly requested parameters */}
+        <video autoPlay muted loop playsInline className="absolute inset-0 w-full h-full object-cover z-0 opacity-40">
+          <source src="https://assets.mixkit.co/videos/preview/mixkit-set-of-plateaus-seen-from-the-sky-in-a-4k-12240-large.mp4" type="video/mp4" />
+        </video>
+        {/* High contrast ambient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/85 via-black/65 to-black z-1" />
         
         <div className="max-w-5xl mx-auto px-6 text-center space-y-8 relative z-10">
-          <h1 className="font-sans font-black text-5xl md:text-8xl uppercase tracking-tighter leading-[0.85] text-white" id="hero-title">
+          <h1 className="font-sans font-black text-5xl md:text-8xl uppercase tracking-tighter leading-[0.85] text-white animate-fade-in" id="hero-title">
             TRINO<br />
             <span className="text-zinc-400 font-serif italic text-4xl md:text-6xl tracking-tight block mt-4 lowercase font-medium">Música, Teatro & Cultura</span>
           </h1>
