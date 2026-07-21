@@ -7,12 +7,10 @@ export const dynamic = 'force-dynamic';
 
 const DEFAULT_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQc8AQvB-p3o5582lkJ8VyWAFhkyWYkfzOX5cFie39AQvARJz3eWrbadaon1wSdeT8MBU0QFERBhrhm/pub?output=csv";
 
-// Helper super robusto para limpiar URLs, quitando paréntesis y corchetes Markdown
+// Sanitizador universal de URLs (remueve corchetes, comillas y formatos raros)
 const cleanUrl = (url: string): string => {
   if (!url) return '';
-  let cleaned = url.replace(/^[\[\(]+|[\]\)]+$/g, '').trim(); // Quita [ ] ( ) de los extremos
-  cleaned = cleaned.replace(/^"|"$/g, '').trim(); // Quita comillas
-  // Si la celda de google sheets exportó un markdown de link: [https...](https...)
+  let cleaned = url.replace(/^[\[\(\s"']+|[\]\)\s"']+$/g, '').trim();
   const mdMatch = cleaned.match(/\((https?:\/\/[^\)]+)\)/);
   if (mdMatch && mdMatch[1]) {
     return mdMatch[1];
@@ -20,48 +18,108 @@ const cleanUrl = (url: string): string => {
   return cleaned;
 };
 
-// Parser robusto usando Regex en lugar de loops manuales frágiles
+// Sanitizador de cadenas de texto (remueve comillas dobles escapadas del CSV)
+const cleanStringValue = (val: string): string => {
+  if (!val) return '';
+  let s = val.trim();
+  if (s.startsWith('"') && s.endsWith('"')) {
+    s = s.slice(1, -1);
+  }
+  s = s.replace(/""/g, '"');
+  return s.trim();
+};
+
 function parseCSV(csvText: string): PortfolioItem[] {
-  const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
+  const lines: string[] = [];
+  let currentLine = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < csvText.length; i++) {
+    const char = csvText[i];
+    if (char === '"') {
+      inQuotes = !inQuotes;
+      currentLine += char;
+    } else if (char === '\n' && !inQuotes) {
+      lines.push(currentLine);
+      currentLine = '';
+    } else if (char === '\r' && !inQuotes) {
+      // Ignorar saltos \r
+    } else {
+      currentLine += char;
+    }
+  }
+  if (currentLine) lines.push(currentLine);
+
   if (lines.length <= 1) return [];
 
-  const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim().toLowerCase());
+  const parseLine = (line: string): string[] => {
+    const result: string[] = [];
+    let current = '';
+    let inQ = false;
+    let idx = 0;
+    while (idx < line.length) {
+      const char = line[idx];
+      if (char === '"') {
+        if (inQ && idx + 1 < line.length && line[idx + 1] === '"') {
+          current += '"';
+          idx++;
+        } else {
+          inQ = !inQ;
+        }
+      } else if (char === ',' && !inQ) {
+        result.push(current);
+        current = '';
+      } else {
+        current += char;
+      }
+      idx++;
+    }
+    result.push(current);
+    return result;
+  };
+
+  const rawHeaders = parseLine(lines[0]);
+  const headers = rawHeaders.map(h => cleanStringValue(h).toLowerCase());
+
   const items: PortfolioItem[] = [];
 
   for (let i = 1; i < lines.length; i++) {
-    const line = lines[i];
-    // Regex magico que parte por comas pero ignora las que están dentro de comillas
-    const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-    
+    const line = lines[i].trim();
+    if (!line) continue;
+
+    const values = parseLine(line);
     const row: Record<string, string> = {};
+
     headers.forEach((header, idx) => {
-      let val = values[idx] || '';
-      val = val.replace(/^"|"$/g, '').trim(); // Limpia comillas perimetrales
-      row[header] = val;
+      if (header) {
+        row[header] = cleanStringValue(values[idx] || '');
+      }
     });
 
-    const title = row['title'] || '';
-    if (!title) continue; // Si no hay titulo, descarta fila (evita columnas vacias o arrastres)
+    const title = row['title'] || row['título'] || row['titulo'] || row['nombre'] || '';
+    if (!title) continue;
 
-    const category = row['category'] || '';
-    const description = row['description'] || '';
-    const image = cleanUrl(row['image'] || '');
-    const videoUrl = cleanUrl(row['videourl'] || '');
-    const date = row['date'] || '';
-    const location = row['location'] || '';
+    const category = row['category'] || row['categoría'] || row['categoria'] || row['rubro'] || '';
+    const description = row['description'] || row['descripción'] || row['descripcion'] || row['resumen'] || '';
+    
+    let image = cleanUrl(row['image'] || row['imagen'] || row['foto'] || row['portada'] || '');
+    let videoUrl = cleanUrl(row['videourl'] || row['video url'] || row['video'] || row['link'] || '');
 
-    const rawGallery = row['gallery'] || '';
+    const date = row['date'] || row['fecha'] || '';
+    const location = row['location'] || row['ubicación'] || row['ubicacion'] || row['lugar'] || '';
+
+    const rawGallery = row['gallery'] || row['galería'] || row['galeria'] || row['fotos'] || '';
     const gallery = rawGallery
-      ? rawGallery.split(',').map(u => cleanUrl(u)).filter(u => u.startsWith('http'))
+      ? rawGallery.split(/[,;]/).map(u => cleanUrl(u)).filter(u => u.startsWith('http'))
       : [];
 
-    const rawHighlights = row['highlights'] || '';
+    const rawHighlights = row['highlights'] || row['destacados'] || row['tags'] || '';
     const highlights = rawHighlights
       ? rawHighlights.split(';').map(h => h.trim()).filter(Boolean)
       : [];
 
     items.push({
-      id: `sheet-${i}-${title.replace(/\s+/g, '-').slice(0, 10).toLowerCase()}`,
+      id: `sheet-${i}-${encodeURIComponent(title.slice(0, 10))}`,
       title,
       category,
       description,
@@ -79,20 +137,39 @@ function parseCSV(csvText: string): PortfolioItem[] {
 
 async function getPortfolioData(): Promise<PortfolioItem[]> {
   try {
-    const sheetUrl = process.env.NEXT_PUBLIC_SHEET_URL || DEFAULT_SHEET_URL;
+    let sheetUrl = process.env.NEXT_PUBLIC_SHEET_URL || DEFAULT_SHEET_URL;
+    sheetUrl = cleanUrl(sheetUrl);
+    
+    if (!sheetUrl || !sheetUrl.startsWith('http')) {
+      sheetUrl = DEFAULT_SHEET_URL;
+    }
+
     const response = await fetch(sheetUrl, {
-      cache: 'no-store', // Elimina la cache para que se actualice en vivo
+      cache: 'no-store',
       next: { revalidate: 0 },
       headers: { 'Accept': 'text/csv' }
     });
     
-    if (!response.ok) throw new Error('Error de conexión');
+    if (!response.ok) {
+      throw new Error(`HTTP Error: ${response.status}`);
+    }
 
     const text = await response.text();
     const parsed = parseCSV(text);
+
     return parsed.length > 0 ? parsed : [];
   } catch (error) {
-    console.error('Error procesando CSV:', error);
+    console.error('Error fetching/parsing CSV:', error);
+    // Reintentamos directamente con la URL base en caso de fallo de red
+    try {
+      const fallbackRes = await fetch(DEFAULT_SHEET_URL, { cache: 'no-store' });
+      if (fallbackRes.ok) {
+        const text = await fallbackRes.text();
+        return parseCSV(text);
+      }
+    } catch (e) {
+      console.error('Fallback fetch error:', e);
+    }
     return [];
   }
 }
@@ -119,26 +196,23 @@ export default async function HomePage() {
         </div>
       </header>
 
-      {/* HERO CINEMATOGRÁFICO CORREGIDO */}
+      {/* HERO CON VIDEO CINEMATOGRÁFICO DE FONDO */}
       <section className="relative overflow-hidden border-b border-zinc-900/60 min-h-[65vh] flex flex-col justify-center py-24 md:py-32">
-        {/* Capa de Video (Fondo real) */}
-        <div className="absolute inset-0 z-0">
-          <video autoPlay muted loop playsInline className="w-full h-full object-cover opacity-60">
+        <div className="absolute inset-0 z-0 pointer-events-none">
+          <video autoPlay muted loop playsInline className="w-full h-full object-cover opacity-50">
             <source src="https://assets.mixkit.co/videos/preview/mixkit-set-of-plateaus-seen-from-the-sky-in-a-4k-12240-large.mp4" type="video/mp4" />
           </video>
         </div>
         
-        {/* Capa de Oscurecimiento (Para legibilidad) */}
-        <div className="absolute inset-0 bg-black/40 z-10" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black z-10 pointer-events-none" />
         
-        {/* Contenido (Textos flotando arriba) */}
         <div className="max-w-5xl mx-auto px-6 text-center space-y-8 relative z-20">
           <h1 className="font-sans font-black text-5xl md:text-8xl uppercase tracking-tighter leading-[0.85] text-white">
             TRINO<br />
             <span className="text-zinc-300 font-serif italic text-4xl md:text-6xl tracking-tight block mt-4 lowercase font-medium">Música, Teatro & Cultura</span>
           </h1>
 
-          <p className="text-zinc-200 text-sm md:text-base max-w-xl mx-auto leading-relaxed font-sans font-light text-shadow-sm">
+          <p className="text-zinc-200 text-sm md:text-base max-w-xl mx-auto leading-relaxed font-sans font-light">
             Dirección artística, curatoría de contenidos y producción ejecutiva. Creamos y promovemos experiencias culturales de primer nivel con un enfoque estético impecable.
           </p>
 
@@ -147,12 +221,12 @@ export default async function HomePage() {
               <Camera className="w-4.5 h-4.5 stroke-[1.2]" />
               Dirección de Arte
             </span>
-            <span className="text-zinc-500">|</span>
+            <span className="text-zinc-600">|</span>
             <span className="flex items-center gap-2">
               <Film className="w-4.5 h-4.5 stroke-[1.2]" />
               Producción de Escena
             </span>
-            <span className="text-zinc-500">|</span>
+            <span className="text-zinc-600">|</span>
             <span className="flex items-center gap-2">
               <Layers className="w-4.5 h-4.5 stroke-[1.2]" />
               Curatoría Cultural
@@ -169,7 +243,7 @@ export default async function HomePage() {
             <h2 className="font-serif italic text-3xl text-white mt-2 font-normal">Obras & Producciones</h2>
           </div>
           <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
-            {items.length} {items.length === 1 ? 'PROYECTO EXPENDIDO' : 'PROYECTOS EXPENDIDOS'}
+            {items.length} {items.length === 1 ? 'PROYECTO' : 'PROYECTOS'}
           </div>
         </div>
 
