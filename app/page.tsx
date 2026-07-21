@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 const DEFAULT_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQc8AQvB-p3o5582lkJ8VyWAFhkyWYkfzOX5cFie39AQvARJz3eWrbadaon1wSdeT8MBU0QFERBhrhm/pub?output=csv";
 
-// Sanitizador universal de URLs (remueve corchetes, comillas y formatos raros)
+// Sanitizador universal de URLs (remueve corchetes, comillas y formatos Markdown)
 const cleanUrl = (url: string): string => {
   if (!url) return '';
   let cleaned = url.replace(/^[\[\(\s"']+|[\]\)\s"']+$/g, '').trim();
@@ -18,7 +18,7 @@ const cleanUrl = (url: string): string => {
   return cleaned;
 };
 
-// Sanitizador de cadenas de texto (remueve comillas dobles escapadas del CSV)
+// Sanitizador de cadenas de texto
 const cleanStringValue = (val: string): string => {
   if (!val) return '';
   let s = val.trim();
@@ -43,7 +43,7 @@ function parseCSV(csvText: string): PortfolioItem[] {
       lines.push(currentLine);
       currentLine = '';
     } else if (char === '\r' && !inQuotes) {
-      // Ignorar saltos \r
+      // Ignorar
     } else {
       currentLine += char;
     }
@@ -91,10 +91,11 @@ function parseCSV(csvText: string): PortfolioItem[] {
     const row: Record<string, string> = {};
 
     headers.forEach((header, idx) => {
-      if (header) {
-        row[header] = cleanStringValue(values[idx] || '');
-      }
+      row[header] = cleanStringValue(values[idx] || '');
     });
+
+    // Capturamos cualquier valor sobrante por columnas sin nombre (Unnamed)
+    const extraValues = values.slice(headers.length).map(v => cleanStringValue(v)).filter(Boolean);
 
     const title = row['title'] || row['título'] || row['titulo'] || row['nombre'] || '';
     if (!title) continue;
@@ -105,17 +106,55 @@ function parseCSV(csvText: string): PortfolioItem[] {
     let image = cleanUrl(row['image'] || row['imagen'] || row['foto'] || row['portada'] || '');
     let videoUrl = cleanUrl(row['videourl'] || row['video url'] || row['video'] || row['link'] || '');
 
-    const date = row['date'] || row['fecha'] || '';
-    const location = row['location'] || row['ubicación'] || row['ubicacion'] || row['lugar'] || '';
+    let date = row['date'] || row['fecha'] || '';
+    let location = row['location'] || row['ubicación'] || row['ubicacion'] || row['lugar'] || '';
+    let rawGallery = row['gallery'] || row['galería'] || row['galeria'] || row['fotos'] || '';
+    let rawHighlights = row['highlights'] || row['destacados'] || row['tags'] || '';
 
-    const rawGallery = row['gallery'] || row['galería'] || row['galeria'] || row['fotos'] || '';
+    // INTELECTA DE AUTOCORRECCIÓN: Si videoUrl no vino en su columna, búscalo en date/location/highlights
+    const allFields = [date, location, rawHighlights, rawGallery, ...extraValues];
+    for (const field of allFields) {
+      if (field && (field.includes('youtube.com') || field.includes('vimeo.com') || field.includes('youtu.be'))) {
+        const foundUrl = cleanUrl(field);
+        if (foundUrl.startsWith('http')) {
+          videoUrl = foundUrl;
+          if (field === date) date = '';
+          if (field === location) location = '';
+          if (field === rawHighlights) rawHighlights = '';
+        }
+      }
+    }
+
+    // INTELECTA DE AUTOCORRECCIÓN: Si la galeria vino descalzada en date/location
+    for (const field of [date, location]) {
+      if (field && (field.includes('unsplash.com') || field.includes('.jpg') || field.includes('.png') || field.includes(','))) {
+        if (!rawGallery) rawGallery = field;
+        if (field === date) date = '';
+        if (field === location) location = '';
+      }
+    }
+
+    // Reubicar date / location si se desplazaron a extraValues
+    if (!date && location && !location.startsWith('http')) {
+      // date está bien en location
+    } else if (!date && extraValues.length > 0) {
+      date = extraValues.find(v => !v.startsWith('http')) || date;
+    }
+
+    if (!location && extraValues.length > 0) {
+      location = extraValues.find(v => !v.startsWith('http') && v !== date) || location;
+    }
+
+    if (!rawHighlights && extraValues.length > 0) {
+      rawHighlights = extraValues.filter(v => !v.startsWith('http') && v !== date && v !== location).join('; ');
+    }
+
     const gallery = rawGallery
       ? rawGallery.split(/[,;]/).map(u => cleanUrl(u)).filter(u => u.startsWith('http'))
       : [];
 
-    const rawHighlights = row['highlights'] || row['destacados'] || row['tags'] || '';
     const highlights = rawHighlights
-      ? rawHighlights.split(';').map(h => h.trim()).filter(Boolean)
+      ? rawHighlights.split(';').map(h => cleanStringValue(h)).filter(Boolean)
       : [];
 
     items.push({
@@ -160,7 +199,6 @@ async function getPortfolioData(): Promise<PortfolioItem[]> {
     return parsed.length > 0 ? parsed : [];
   } catch (error) {
     console.error('Error fetching/parsing CSV:', error);
-    // Reintentamos directamente con la URL base en caso de fallo de red
     try {
       const fallbackRes = await fetch(DEFAULT_SHEET_URL, { cache: 'no-store' });
       if (fallbackRes.ok) {
@@ -196,15 +234,21 @@ export default async function HomePage() {
         </div>
       </header>
 
-      {/* HERO CON VIDEO CINEMATOGRÁFICO DE FONDO */}
+      {/* HERO CON VIDEO CINEMATOGRÁFICO DE FONDO GARANTIZADO */}
       <section className="relative overflow-hidden border-b border-zinc-900/60 min-h-[65vh] flex flex-col justify-center py-24 md:py-32">
         <div className="absolute inset-0 z-0 pointer-events-none">
-          <video autoPlay muted loop playsInline className="w-full h-full object-cover opacity-50">
-            <source src="https://assets.mixkit.co/videos/preview/mixkit-set-of-plateaus-seen-from-the-sky-in-a-4k-12240-large.mp4" type="video/mp4" />
+          <video 
+            autoPlay 
+            muted 
+            loop 
+            playsInline 
+            className="w-full h-full object-cover opacity-40 scale-105 transform"
+          >
+            <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4" type="video/mp4" />
           </video>
         </div>
         
-        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black z-10 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black z-10 pointer-events-none" />
         
         <div className="max-w-5xl mx-auto px-6 text-center space-y-8 relative z-20">
           <h1 className="font-sans font-black text-5xl md:text-8xl uppercase tracking-tighter leading-[0.85] text-white">
